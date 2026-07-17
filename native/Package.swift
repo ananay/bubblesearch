@@ -21,6 +21,12 @@ let package = Package(
                 // find the embedded Sparkle.framework inside BubbleSearch.app
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
             ]
-        )
+        ),
+        .testTarget(
+            name: "BubbleSearchTests",
+            dependencies: ["bubblesearch"],
+            path: "Tests/BubbleSearchTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )
