@@ -97,9 +97,29 @@ struct VisualEffectBackground: NSViewRepresentable {
     }
 }
 
+/// The SPM resource bundle, resolved by hand. `Bundle.module` must not be
+/// referenced anywhere in this target: for executable targets SPM generates
+/// it with only two candidates — the .app root (never valid for a signed
+/// app, resources live in Contents/Resources) and an absolute .build path
+/// on the machine that compiled the release — and it fatalErrors on every
+/// other Mac.
+private let resourceBundle: Bundle? = {
+    let name = "bubblesearch_bubblesearch.bundle"
+    let candidates = [
+        Bundle.main.resourceURL, // packaged .app: Contents/Resources
+        Bundle.main.bundleURL,   // `swift run` / `swift test`: next to the executable
+    ]
+    for candidate in candidates {
+        if let bundle = candidate.flatMap({ Bundle(url: $0.appendingPathComponent(name)) }) {
+            return bundle
+        }
+    }
+    return nil
+}()
+
 /// The BubbleSearch logo, bundled as an SPM resource.
 enum AppLogo {
-    static let image: NSImage? = Bundle.module
+    static let image: NSImage? = resourceBundle?
         .url(forResource: "logo", withExtension: "png")
         .flatMap { NSImage(contentsOf: $0) }
 }
