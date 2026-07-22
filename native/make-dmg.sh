@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 
-VERSION="${1:-1.0.2}"
+VERSION="${1:-1.0.6}"
 VERSION="$VERSION" ./make-app.sh
 
 IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)".*/\1/')}"

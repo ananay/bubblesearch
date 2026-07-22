@@ -12,7 +12,7 @@ Everything runs on your Mac. Search never leaves your machine.
 - **iMessage-style browsing** — conversation sidebar with contact photos (incl. group photos/collages), bubble threads with day separators, infinite scroll, tapbacks with Apple's own glyphs, reply quotes, link-preview cards, and a photos/videos grid.
 - **Live** — a file-system watcher re-indexes new messages automatically; ⌘R force-reloads.
 - **Jump to date**, per-conversation search, keyboard-driven navigation (⌘1/⌘2 tabs, arrow-key sidebar).
-- **Auto-updates** via [Sparkle](https://sparkle-project.org).
+- **Unobtrusive signed updates** via [Sparkle](https://sparkle-project.org), surfaced in the title bar without interrupting your work.
 
 ## Requirements
 

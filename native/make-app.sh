@@ -1,10 +1,10 @@
 #!/bin/sh
 # Assemble a double-clickable BubbleSearch.app from a release build.
-# VERSION env (default 1.0.0) sets the bundle version.
+# VERSION env (default 1.0.6) sets the bundle version.
 set -e
 cd "$(dirname "$0")"
 
-VERSION="${VERSION:-1.0.2}"
+VERSION="${VERSION:-1.0.6}"
 PUBKEY=$(cat sparkle-public-ed-key.txt)
 
 swift build -c release
@@ -47,6 +47,7 @@ cat > "$APP/Contents/Info.plist" << EOF
     <key>SUPublicEDKey</key>           <string>$PUBKEY</string>
     <key>SUEnableAutomaticChecks</key> <true/>
     <key>SUAutomaticallyUpdate</key>   <true/>
+    <key>SUScheduledCheckInterval</key> <integer>3600</integer>
 </dict>
 </plist>
 EOF
