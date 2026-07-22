@@ -1,10 +1,10 @@
 #!/bin/sh
 # Assemble a double-clickable BubbleSearch.app from a release build.
-# VERSION env (default 1.0.6) sets the bundle version.
+# VERSION env overrides the version stored in native/VERSION.
 set -e
 cd "$(dirname "$0")"
 
-VERSION="${VERSION:-1.0.6}"
+VERSION=$(./scripts/read-version.sh "${VERSION:-}")
 PUBKEY=$(cat sparkle-public-ed-key.txt)
 
 swift build -c release

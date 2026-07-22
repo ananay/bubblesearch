@@ -12,7 +12,7 @@ Sparkle's `generate_appcast` finds that matching file and embeds it in the appca
 ## Prepare notes with GitHub Actions
 
 1. Open **Actions → Prepare Sparkle release notes → Run workflow**.
-2. Select the commit being released and enter the version.
+2. Select the commit being released. Leave **version** empty to use `native/VERSION`; a supplied version must match that file.
 3. Leave both notes fields empty to use that commit's complete message (subject and body).
 4. Optionally set **release_notes** to replace the commit message.
 5. Optionally set **additional_release_notes** to add text after the commit message or replacement text.
@@ -26,14 +26,15 @@ The default command uses the latest commit message:
 
 ```sh
 cd native
-python3 scripts/generate-release-notes.py --version 1.0.6 --commit HEAD
+RELEASE_VERSION=$(scripts/read-version.sh)
+python3 scripts/generate-release-notes.py --version "$RELEASE_VERSION" --commit HEAD
 ```
 
 To replace it, put any plain text in a file:
 
 ```sh
 python3 scripts/generate-release-notes.py \
-  --version 1.0.6 \
+  --version "$RELEASE_VERSION" \
   --notes-file /path/to/release-notes.txt
 ```
 
@@ -41,12 +42,16 @@ To keep the commit message and add a separate paragraph:
 
 ```sh
 python3 scripts/generate-release-notes.py \
-  --version 1.0.6 \
+  --version "$RELEASE_VERSION" \
   --commit HEAD \
   --append-file /path/to/additional-notes.txt
 ```
 
 Use `--notes-file` and `--append-file` together to replace the default and then append more text. Blank lines start new paragraphs; single line breaks remain line breaks.
+
+## Bump the app version
+
+`native/VERSION` is the single source of truth for the app bundle, DMG name, and release-notes workflow. Update that file in the release commit. The packaging scripts validate command-line or environment overrides, and CI verifies that both packaged bundle-version keys match the file.
 
 ## Publish through Sparkle
 

@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version, such as 1.0.6
-        required: true
+        description: Optional version; when provided, it must match native/VERSION
+        required: false
         type: string
       release_notes:
         description: Optional text that replaces the latest commit message
@@ -29,11 +29,18 @@ jobs:
           fetch-depth: 0
 
       - name: Generate release notes
+        id: notes
         env:
-          VERSION: ${{ inputs.version }}
+          REQUESTED_VERSION: ${{ inputs.version }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
           ADDITIONAL_RELEASE_NOTES: ${{ inputs.additional_release_notes }}
         run: |
+          VERSION=$(native/scripts/read-version.sh)
+          if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$VERSION" ]]; then
+            echo "::error::Requested version $REQUESTED_VERSION does not match native/VERSION ($VERSION)"
+            exit 1
+          fi
+
           NOTES_DIR="$RUNNER_TEMP/release-notes"
           ARGUMENTS=(
             --version "$VERSION"
@@ -52,6 +59,7 @@ jobs:
           fi
 
           python3 native/scripts/generate-release-notes.py "${ARGUMENTS[@]}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           {
             echo "## BubbleSearch $VERSION release notes"
@@ -64,7 +72,7 @@ jobs:
       - name: Upload release notes
         uses: actions/upload-artifact@v4
         with:
-          name: BubbleSearch-${{ inputs.version }}-release-notes
-          path: ${{ runner.temp }}/release-notes/BubbleSearch-${{ inputs.version }}.html
+          name: BubbleSearch-${{ steps.notes.outputs.version }}-release-notes
+          path: ${{ runner.temp }}/release-notes/BubbleSearch-${{ steps.notes.outputs.version }}.html
           if-no-files-found: error
           retention-days: 30
