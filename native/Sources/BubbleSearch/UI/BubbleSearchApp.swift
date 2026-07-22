@@ -56,8 +56,8 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Share usage ping", isOn: $telemetryEnabled)
-                Text("Once a day, BubbleSearch sends a persistent install ID, the app version, and your macOS version. Because the ID persists, your IP address and approximate location (from that request) are also recorded. Never your messages, contacts, or search queries. Turn this off to send nothing.")
+                Toggle("Share usage ping & crash reports", isOn: $telemetryEnabled)
+                Text("Once a day, BubbleSearch sends a persistent install ID, the app version, and your macOS version. If BubbleSearch crashed, an anonymous summary of the crash (exception type and stack frames) is sent too. Because the ID persists, your IP address and approximate location (from those requests) are also recorded. Never your messages, contacts, or search queries. Turn this off to send nothing.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

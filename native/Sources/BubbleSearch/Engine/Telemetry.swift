@@ -14,6 +14,20 @@ enum Telemetry {
     private static let installIDKey = "telemetryInstallID"
     private static let lastPingKey = "telemetryLastPingDate"
 
+    /// Random per-install UUID shared by the daily ping and crash reports.
+    /// Generated once, tied to nothing.
+    static var installID: String {
+        let defaults = UserDefaults.standard
+        if let id = defaults.string(forKey: installIDKey) { return id }
+        let id = UUID().uuidString
+        defaults.set(id, forKey: installIDKey)
+        return id
+    }
+
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    }
+
     static func pingIfNeeded() {
         guard let endpoint else { return }
         let defaults = UserDefaults.standard
@@ -22,15 +36,9 @@ enum Telemetry {
         let today = ISO8601DateFormatter.dateOnly.string(from: Date())
         guard defaults.string(forKey: lastPingKey) != today else { return }
 
-        var installID = defaults.string(forKey: installIDKey)
-        if installID == nil {
-            installID = UUID().uuidString
-            defaults.set(installID, forKey: installIDKey)
-        }
-
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        let version = appVersion
         let payload: [String: String] = [
-            "id": installID!,
+            "id": installID,
             "version": version,
             "os": ProcessInfo.processInfo.operatingSystemVersionString,
         ]

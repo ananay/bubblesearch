@@ -272,6 +272,7 @@ final class AppStore: ObservableObject {
 
     private func bootstrap() async {
         Telemetry.pingIfNeeded()
+        CrashReporter.reportNewCrashesIfEnabled()
 
         // First-run gate: without Full Disk Access, show onboarding and poll
         // until the grant appears (macOS applies it without relaunch often
