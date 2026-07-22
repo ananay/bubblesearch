@@ -33,6 +33,8 @@ swift run bubblesearch --selftest  # engine checks against the live databases
 
 Distribution builds are signed with a Developer ID and notarized (`make-dmg.sh` handles it when a `bubblesearch-notary` keychain profile is configured). Without a certificate, builds are ad-hoc signed and run locally.
 
+Maintainers can use the GitHub workflow to turn the release commit message into Sparkle's in-app “What's New” text, replace it, or append custom text. See [Publishing release notes](docs/releasing.md).
+
 ## How it works
 
 - **`Engine/TypedStream.swift`** — on modern macOS the `message.text` column is almost always empty; the real content lives in `attributedBody`, a NeXTSTEP `typedstream` blob. This decodes it (verified 99.98% on a real database).

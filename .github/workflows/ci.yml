@@ -24,6 +24,28 @@ jobs:
       - name: Test
         run: swift test
 
+      - name: Test release notes generator
+        run: |
+          NOTES_DIR=$(mktemp -d)
+          python3 scripts/generate-release-notes.py \
+            --version 0.0.0 \
+            --commit "$GITHUB_SHA" \
+            --output-dir "$NOTES_DIR"
+
+          SUBJECT=$(git show -s --format=%s "$GITHUB_SHA")
+          grep -F "$SUBJECT" "$NOTES_DIR/BubbleSearch-0.0.0.html"
+
+          printf '%s\n' 'Custom <headline>' > "$NOTES_DIR/custom.txt"
+          printf '%s\n' 'More & detail' > "$NOTES_DIR/additional.txt"
+          python3 scripts/generate-release-notes.py \
+            --version 0.0.1 \
+            --notes-file "$NOTES_DIR/custom.txt" \
+            --append-file "$NOTES_DIR/additional.txt" \
+            --output-dir "$NOTES_DIR"
+
+          grep -F 'Custom &lt;headline&gt;' "$NOTES_DIR/BubbleSearch-0.0.1.html"
+          grep -F 'More &amp; detail' "$NOTES_DIR/BubbleSearch-0.0.1.html"
+
   release-artifact:
     name: Release artifact checks
     runs-on: macos-15

@@ -1,0 +1,70 @@
+name: Prepare Sparkle release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, such as 1.0.6
+        required: true
+        type: string
+      release_notes:
+        description: Optional text that replaces the latest commit message
+        required: false
+        type: string
+      additional_release_notes:
+        description: Optional text appended to the commit message or replacement text
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Generate notes sidecar
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          ADDITIONAL_RELEASE_NOTES: ${{ inputs.additional_release_notes }}
+        run: |
+          NOTES_DIR="$RUNNER_TEMP/release-notes"
+          ARGUMENTS=(
+            --version "$VERSION"
+            --commit "$GITHUB_SHA"
+            --output-dir "$NOTES_DIR"
+          )
+
+          if [[ -n "$RELEASE_NOTES" ]]; then
+            printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes-override.txt"
+            ARGUMENTS+=(--notes-file "$RUNNER_TEMP/release-notes-override.txt")
+          fi
+
+          if [[ -n "$ADDITIONAL_RELEASE_NOTES" ]]; then
+            printf '%s\n' "$ADDITIONAL_RELEASE_NOTES" > "$RUNNER_TEMP/additional-release-notes.txt"
+            ARGUMENTS+=(--append-file "$RUNNER_TEMP/additional-release-notes.txt")
+          fi
+
+          python3 native/scripts/generate-release-notes.py "${ARGUMENTS[@]}"
+
+          {
+            echo "## BubbleSearch $VERSION release notes"
+            echo
+            echo "Generated from commit \`$GITHUB_SHA\`."
+            echo
+            sed 's/^/> /' "$NOTES_DIR/BubbleSearch-$VERSION.html"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: BubbleSearch-${{ inputs.version }}-release-notes
+          path: ${{ runner.temp }}/release-notes/BubbleSearch-${{ inputs.version }}.html
+          if-no-files-found: error
+          retention-days: 30
