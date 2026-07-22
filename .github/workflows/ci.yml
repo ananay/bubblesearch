@@ -23,3 +23,64 @@ jobs:
 
       - name: Test
         run: swift test
+
+  release-artifact:
+    name: Release artifact checks
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bundle.module in an SPM *executable* target compiles to a lookup with
+      # a fatalError fallback to an absolute .build path on the packaging
+      # machine — it works on the dev Mac and crashes at launch everywhere
+      # else (shipped as 1.0.2/1.0.3, fixed in 1.0.4). Never reference it.
+      - name: Ban Bundle.module in executable target
+        run: |
+          if grep -rn "Bundle\.module" Sources | grep -vE '^[^:]+:[0-9]+: *//'; then
+            echo "::error::Bundle.module is a launch crash in a distributed .app; resolve the resource bundle via Bundle.main instead (see UI/Helpers.swift)"
+            exit 1
+          fi
+
+      - name: Build release binary
+        run: swift build -c release
+
+      # A path from the build machine baked into the binary means some code
+      # path only works where it was compiled. On this runner any such path
+      # would be /Users/runner/..., so grep for /Users/ generally. The
+      # "could not load resource bundle" literal is SPM's generated
+      # Bundle.module fatalError message — if it got linked in, the crashing
+      # accessor is back.
+      - name: No machine-specific paths in release binary
+        run: |
+          BIN=.build/release/bubblesearch
+          if strings "$BIN" | grep -E "^/Users/" ; then
+            echo "::error::build-machine paths are baked into the release binary"
+            exit 1
+          fi
+          if strings "$BIN" | grep -q "could not load resource bundle"; then
+            echo "::error::SPM's generated Bundle.module accessor is linked into the binary"
+            exit 1
+          fi
+
+      # The runner has no Developer ID cert, so make-app.sh ad-hoc signs —
+      # which is exactly what we want: this machine is "someone else's Mac".
+      # The 1.0.2/1.0.3 crash fired inside OnboardingView during the first
+      # window's creation, so surviving launch for a few seconds catches
+      # this bug and any future crash-at-launch regression in the packaged
+      # app (missing resources, bad rpath, unembedded framework, ...).
+      - name: Launch smoke test of packaged app
+        run: |
+          ./make-app.sh
+          build/BubbleSearch.app/Contents/MacOS/BubbleSearch &
+          APP_PID=$!
+          sleep 5
+          if ! kill -0 "$APP_PID" 2>/dev/null; then
+            wait "$APP_PID" || STATUS=$?
+            echo "::error::packaged app died within 5s of launch (exit status ${STATUS:-unknown})"
+            exit 1
+          fi
+          echo "app alive 5s after launch"
+          kill "$APP_PID"
