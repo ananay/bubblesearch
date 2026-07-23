@@ -43,7 +43,7 @@ cat > "$APP/Contents/Info.plist" << EOF
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>NSHighResolutionCapable</key> <true/>
     <key>NSHumanReadableCopyright</key> <string>Local-only iMessage search. Nothing leaves this Mac except an optional anonymous daily ping and crash reports.</string>
-    <key>SUFeedURL</key>               <string>https://bst.0xaa.io/appcast.xml</string>
+    <key>SUFeedURL</key>               <string>https://bubblesearch.app/appcast.xml</string>
     <key>SUPublicEDKey</key>           <string>$PUBKEY</string>
     <key>SUEnableAutomaticChecks</key> <true/>
     <key>SUAutomaticallyUpdate</key>   <true/>
