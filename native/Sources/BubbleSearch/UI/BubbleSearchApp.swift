@@ -11,7 +11,10 @@ struct BubbleSearchApp: App {
                 .environmentObject(store)
                 .environmentObject(store.media)
                 .environmentObject(updates)
-                .frame(minWidth: 920, minHeight: 720)
+                // minHeight must stay ≤ ~560: a 13.6" MacBook Air with the
+                // Dock visible has only ~720-735 pt of usable height, so a
+                // taller floor pins the window bottom under the Dock.
+                .frame(minWidth: 920, minHeight: 560)
         }
         .defaultSize(width: 1_000, height: 760)
         .windowStyle(.titleBar)

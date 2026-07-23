@@ -58,8 +58,20 @@ final class SparkleUpdateController: ObservableObject {
 
     func checkForUpdates() {
         guard let updater else { return }
+        // A pending Sparkle interaction must be re-surfaced, never discarded:
+        // the stored reply closures resume checked continuations inside
+        // TitlebarSparkleUserDriver (and the install-on-quit block is
+        // Sparkle's only install hook once willInstallUpdateOnQuit returns
+        // true). Dropping one leaks the continuation and wedges Sparkle's
+        // session — canCheckForUpdates is true while an update is shown
+        // (SPUUpdater's updateShownHandler), so the guard below cannot
+        // protect against this.
+        if choiceHandler != nil || permissionHandler != nil || immediateInstallHandler != nil {
+            presentPendingInteraction()
+            return
+        }
         guard updater.canCheckForUpdates else {
-            requestPresentation()
+            presentPendingInteraction()
             return
         }
         resetInteractionHandlers()
@@ -69,6 +81,31 @@ final class SparkleUpdateController: ObservableObject {
 
     func requestPresentation() {
         guard !status.isIdle else { return }
+        presentationRequest += 1
+    }
+
+    /// Bring whatever Sparkle is waiting on (or quietly doing) back on
+    /// screen. Used when a check is requested while a session is already in
+    /// flight or was hidden with "Later"/"Hide" — the pill may be idle then,
+    /// so restore the pending state before presenting the popover.
+    private func presentPendingInteraction() {
+        if status.isIdle {
+            if immediateInstallHandler != nil {
+                setStatus(.readyToInstall(currentOffer))
+            } else if choiceHandler != nil {
+                if let offer = currentOffer, offer.stage == .notDownloaded {
+                    setStatus(.updateAvailable(offer))
+                } else {
+                    setStatus(.readyToInstall(currentOffer))
+                }
+            } else if permissionHandler != nil {
+                setStatus(.permissionRequest)
+            } else if let offer = currentOffer {
+                setStatus(.backgroundDownloading(offer))
+            } else {
+                return // nothing pending to show
+            }
+        }
         presentationRequest += 1
     }
 
@@ -98,10 +135,14 @@ final class SparkleUpdateController: ObservableObject {
     }
 
     func dismissUpdate() {
-        immediateInstallHandler = nil
         if choiceHandler == nil {
+            // Keep immediateInstallHandler: once willInstallUpdateOnQuit
+            // returns true, Sparkle's scheduler is stalled and this block is
+            // the only remaining way to install (or re-present) the update.
+            // "Later" just hides the pill; checkForUpdates() restores it.
             setStatus(.idle)
         } else {
+            immediateInstallHandler = nil
             reply(with: .dismiss)
         }
     }
@@ -232,6 +273,9 @@ extension SparkleUpdateController: TitlebarSparkleUserDriverDelegate {
         reply: @escaping (SPUUserUpdateChoice) -> Void
     ) {
         cancellation = nil
+        // A stale install-on-quit block must not shadow this fresh choice in
+        // install() — the reply continuation would leak.
+        immediateInstallHandler = nil
         choiceHandler = reply
         if case .readyToInstall = status {
             setStatus(.readyToInstall(currentOffer))

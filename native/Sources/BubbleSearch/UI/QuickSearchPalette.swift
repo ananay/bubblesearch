@@ -104,7 +104,17 @@ struct QuickSearchPalette: View {
             .shadow(color: .black.opacity(0.3), radius: 24, y: 8)
             .padding(.top, 90)
         }
-        .onAppear { focused = true }
+        // Setting FocusState in the same update that inserts the view is
+        // routinely dropped on macOS (the field isn't registered with the
+        // focus system yet), and focus then falls to the window's first
+        // text field — the sidebar's "Filter conversations". defaultFocus
+        // claims initial focus for this scope; the async re-set covers OSes
+        // where defaultFocus alone doesn't move an already-active focus.
+        .defaultFocus($focused, true)
+        .onAppear {
+            focused = true
+            DispatchQueue.main.async { focused = true }
+        }
     }
 
     private func sectionHeader(_ title: String) -> some View {
