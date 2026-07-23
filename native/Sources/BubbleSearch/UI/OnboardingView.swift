@@ -10,99 +10,109 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        VStack(spacing: 28) {
-            Spacer()
-
-            VStack(spacing: 14) {
-                if let logo = AppLogo.image {
-                    // No .shadow() here: the Icon Composer artwork has its own
-                    // baked shadow — doubling it dirties the edges.
-                    Image(nsImage: logo)
-                        .interpolation(.high)
-                        .antialiased(true)
-                        .resizable()
-                        .frame(width: 96, height: 96)
-                } else {
-                    Image(systemName: "text.magnifyingglass")
-                        .font(.system(size: 56, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
-                }
-                Text("Welcome to BubbleSearch")
-                    .font(.system(size: 28, weight: .bold))
-                Text("Blazing-fast, fully local search for your entire iMessage history.\nEverything stays on this Mac.")
+        ScrollView {
+            VStack(spacing: 22) {
+                VStack(spacing: 14) {
+                    if let logo = AppLogo.image {
+                        // No .shadow() here: the Icon Composer artwork has its own
+                        // baked shadow — doubling it dirties the edges.
+                        Image(nsImage: logo)
+                            .interpolation(.high)
+                            .antialiased(true)
+                            .resizable()
+                            .frame(width: 96, height: 96)
+                            .accessibilityHidden(true)
+                    } else {
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 56, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityHidden(true)
+                    }
+                    Text("Welcome to BubbleSearch")
+                        .font(.system(size: 28, weight: .bold))
+                    Text(
+                        "Blazing-fast, fully local search for your entire iMessage history.\nEverything stays on this Mac."
+                    )
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-            }
-
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "lock.shield")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.accentColor)
-                    Text("One-time setup: Full Disk Access")
-                        .font(.system(size: 15, weight: .semibold))
                 }
-                Text("BubbleSearch reads the Messages database directly (read-only) to search your texts. macOS protects that file behind Full Disk Access, so it needs your permission once.")
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.shield")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Color.accentColor)
+                        Text("One-time setup: Full Disk Access")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    Text(
+                        "BubbleSearch reads the Messages database directly (read-only) to search your texts. macOS protects that file behind Full Disk Access, so it needs your permission once."
+                    )
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if isAppBundle {
-                    draggableAppTile
+                    if isAppBundle {
+                        draggableAppTile
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        setupStep(1, "Click **Open System Settings** below")
+                        setupStep(
+                            2,
+                            isAppBundle
+                                ? "**Drag the icon above** into the Full Disk Access list, then switch it on"
+                                : "Click **+**, choose **BubbleSearch** in Applications, and switch it on")
+                        setupStep(3, "If macOS asks, choose **Quit & Reopen** — or use the button below")
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            NSWorkspace.shared.open(
+                                URL(
+                                    string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+                                )!
+                            )
+                        } label: {
+                            Text("Open System Settings")
+                                .frame(minWidth: 160)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+
+                        Button {
+                            relaunch()
+                        } label: {
+                            Text("Relaunch BubbleSearch")
+                                .frame(minWidth: 160)
+                        }
+                        .controlSize(.large)
+                        .disabled(!isAppBundle)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    Text("This screen disappears automatically once access is granted.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
                 }
+                .padding(22)
+                .frame(maxWidth: 460)
+                .background(RoundedRectangle(cornerRadius: 16).fill(.quinary))
 
-                VStack(alignment: .leading, spacing: 6) {
-                    setupStep(1, "Click **Open System Settings** below")
-                    setupStep(2, isAppBundle
-                        ? "**Drag the icon above** into the Full Disk Access list, then switch it on"
-                        : "Click **+**, choose **BubbleSearch** in Applications, and switch it on")
-                    setupStep(3, "If macOS asks, choose **Quit & Reopen** — or use the button below")
-                }
-
-                HStack(spacing: 10) {
-                    Button {
-                        NSWorkspace.shared.open(
-                            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-                        )
-                    } label: {
-                        Text("Open System Settings")
-                            .frame(minWidth: 160)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-
-                    Button {
-                        relaunch()
-                    } label: {
-                        Text("Relaunch BubbleSearch")
-                            .frame(minWidth: 160)
-                    }
-                    .controlSize(.large)
-                    .disabled(!isAppBundle)
-                }
-                .frame(maxWidth: .infinity)
-
-                Text("This screen disappears automatically once access is granted.")
+                Text("Private by design. All searching is done locally on your computer and not sent out.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 480)
             }
-            .padding(22)
-            .frame(maxWidth: 460)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.quinary))
-
-            Spacer()
-
-            Text("Private by design. All searching is done locally on your computer and not sent out.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 480)
-                .padding(.bottom, 24)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 32)
+            .padding(.top, 32)
+            .padding(.bottom, 20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 

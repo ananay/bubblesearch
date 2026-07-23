@@ -1,31 +1,26 @@
-import Sparkle
 import SwiftUI
 
 struct BubbleSearchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = AppStore()
-
-    /// Sparkle only runs from a real .app bundle (dev `swift run` binaries
-    /// have no Info.plist feed/keys — the updater would just complain).
-    private static let updaterController: SPUStandardUpdaterController? = {
-        guard Bundle.main.bundlePath.hasSuffix(".app") else { return nil }
-        return SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-    }()
+    @StateObject private var updates = SparkleUpdateController()
 
     var body: some Scene {
         WindowGroup("BubbleSearch") {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(store.media)
-                .frame(minWidth: 920, minHeight: 560)
+                .environmentObject(updates)
+                .frame(minWidth: 920, minHeight: 720)
         }
-        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1_000, height: 760)
+        .windowStyle(.titleBar)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
-                    Self.updaterController?.updater.checkForUpdates()
+                    updates.checkForUpdates()
                 }
-                .disabled(Self.updaterController == nil)
+                .disabled(!updates.isAvailable)
             }
             CommandGroup(after: .newItem) {
                 Button("Refresh") { store.refresh() }
@@ -44,29 +39,31 @@ struct BubbleSearchApp: App {
         }
 
         Settings {
-            SettingsView(updaterController: Self.updaterController)
+            SettingsView(updates: updates)
         }
     }
 }
 
 struct SettingsView: View {
-    let updaterController: SPUStandardUpdaterController?
+    @ObservedObject var updates: SparkleUpdateController
     @AppStorage(Telemetry.enabledKey) private var telemetryEnabled = true
 
     var body: some View {
         Form {
             Section {
                 Toggle("Share usage ping & crash reports", isOn: $telemetryEnabled)
-                Text("Once a day, BubbleSearch sends a persistent install ID, the app version, and your macOS version. If BubbleSearch crashed, an anonymous summary of the crash (exception type and stack frames) is sent too. Because the ID persists, your IP address and approximate location (from those requests) are also recorded. Never your messages, contacts, or search queries. Turn this off to send nothing.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Once a day, BubbleSearch sends a persistent install ID, the app version, and your macOS version. If BubbleSearch crashed, an anonymous summary of the crash (exception type and stack frames) is sent too. Because the ID persists, your IP address and approximate location (from those requests) are also recorded. Never your messages, contacts, or search queries. Turn this off to send nothing."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             Section {
                 Button("Check for Updates…") {
-                    updaterController?.updater.checkForUpdates()
+                    updates.checkForUpdates()
                 }
-                .disabled(updaterController == nil)
-                if updaterController == nil {
+                .disabled(!updates.isAvailable)
+                if !updates.isAvailable {
                     Text("Updates are available when running the packaged BubbleSearch.app.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -114,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct ContentView: View {
     @EnvironmentObject var store: AppStore
+    @EnvironmentObject var updates: SparkleUpdateController
 
     var body: some View {
         ZStack {
@@ -153,6 +151,10 @@ struct ContentView: View {
             Button("OK") { store.startupError = nil }
         } message: {
             Text(store.startupError ?? "")
+        }
+        .background {
+            SparkleUpdateTitlebarAccessory(controller: updates)
+                .frame(width: 0, height: 0)
         }
     }
 
@@ -212,7 +214,7 @@ struct TabRail: View {
                         .foregroundStyle(Color.accentColor)
                 }
             }
-            .padding(.top, 36) // clear the floating traffic lights (hidden title bar)
+            .padding(.top, 12)
             .padding(.bottom, 4)
 
             railButton(.chats, systemImage: "message.fill", help: "Chats")

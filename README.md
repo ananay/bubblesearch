@@ -12,7 +12,7 @@ Everything runs on your Mac. Search never leaves your machine.
 - **iMessage-style browsing** — conversation sidebar with contact photos (incl. group photos/collages), bubble threads with day separators, infinite scroll, tapbacks with Apple's own glyphs, reply quotes, link-preview cards, and a photos/videos grid.
 - **Live** — a file-system watcher re-indexes new messages automatically; ⌘R force-reloads.
 - **Jump to date**, per-conversation search, keyboard-driven navigation (⌘1/⌘2 tabs, arrow-key sidebar).
-- **Auto-updates** via [Sparkle](https://sparkle-project.org).
+- **Unobtrusive signed updates** via [Sparkle](https://sparkle-project.org), surfaced in the title bar without interrupting your work.
 
 ## Requirements
 
@@ -32,6 +32,8 @@ swift run bubblesearch --selftest  # engine checks against the live databases
 ```
 
 Distribution builds are signed with a Developer ID and notarized (`make-dmg.sh` handles it when a `bubblesearch-notary` keychain profile is configured). Without a certificate, builds are ad-hoc signed and run locally.
+
+Maintainers can use the GitHub workflow to turn the release commit message into Sparkle's in-app “What's New” text, replace it, or append custom text. See [Publishing release notes](docs/releasing.md).
 
 ## How it works
 

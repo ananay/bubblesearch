@@ -24,6 +24,51 @@ jobs:
       - name: Test
         run: swift test
 
+      - name: Test release notes generator
+        run: |
+          NOTES_DIR=$(mktemp -d)
+          python3 scripts/generate-release-notes.py \
+            --version 0.0.0 \
+            --commit "$GITHUB_SHA" \
+            --output-dir "$NOTES_DIR"
+
+          SUBJECT=$(git show -s --format=%s "$GITHUB_SHA")
+          grep -F "$SUBJECT" "$NOTES_DIR/BubbleSearch-0.0.0.html"
+
+          printf '%s\n' 'Custom <headline>' > "$NOTES_DIR/custom.txt"
+          printf '%s\n' 'More & detail' > "$NOTES_DIR/additional.txt"
+          python3 scripts/generate-release-notes.py \
+            --version 0.0.1 \
+            --notes-file "$NOTES_DIR/custom.txt" \
+            --append-file "$NOTES_DIR/additional.txt" \
+            --output-dir "$NOTES_DIR"
+
+          grep -F 'Custom &lt;headline&gt;' "$NOTES_DIR/BubbleSearch-0.0.1.html"
+          grep -F 'More &amp; detail' "$NOTES_DIR/BubbleSearch-0.0.1.html"
+
+  supported-macos:
+    name: macOS 14 (${{ matrix.architecture }})
+    runs-on: macos-15
+    strategy:
+      matrix:
+        architecture: [arm64, x86_64]
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build for macOS 14
+        run: |
+          TARGET_TRIPLE="${{ matrix.architecture }}-apple-macosx14.0"
+          swift build -c release --triple "$TARGET_TRIPLE"
+          BINARY_DIRECTORY=$(swift build -c release --triple "$TARGET_TRIPLE" --show-bin-path)
+          MINIMUM_SYSTEM_VERSION=$(vtool -show-build "$BINARY_DIRECTORY/bubblesearch" | awk '/minos/{print $2; exit}')
+          if [[ "$MINIMUM_SYSTEM_VERSION" != "14.0" ]]; then
+            echo "::error::$TARGET_TRIPLE binary targets macOS $MINIMUM_SYSTEM_VERSION instead of 14.0"
+            exit 1
+          fi
+
   release-artifact:
     name: Release artifact checks
     runs-on: macos-15
@@ -74,6 +119,31 @@ jobs:
       - name: Launch smoke test of packaged app
         run: |
           ./make-app.sh
+
+          EXPECTED_VERSION=$(scripts/read-version.sh)
+          SHORT_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/BubbleSearch.app/Contents/Info.plist)
+          BUNDLE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/BubbleSearch.app/Contents/Info.plist)
+          MINIMUM_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' build/BubbleSearch.app/Contents/Info.plist)
+          BINARY_MINIMUM_SYSTEM_VERSION=$(vtool -show-build build/BubbleSearch.app/Contents/MacOS/BubbleSearch | awk '/minos/{print $2; exit}')
+          SPARKLE_MINIMUM_SYSTEM_VERSION=$(vtool -show-build build/BubbleSearch.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle | awk '/minos/{print $2; exit}')
+
+          if [[ "$SHORT_VERSION" != "$EXPECTED_VERSION" || "$BUNDLE_VERSION" != "$EXPECTED_VERSION" ]]; then
+            echo "::error::packaged versions ($SHORT_VERSION/$BUNDLE_VERSION) do not match native/VERSION ($EXPECTED_VERSION)"
+            exit 1
+          fi
+          if [[ "$MINIMUM_SYSTEM_VERSION" != "14.0" ]]; then
+            echo "::error::packaged minimum macOS version changed from 14.0 to $MINIMUM_SYSTEM_VERSION"
+            exit 1
+          fi
+          if [[ "$BINARY_MINIMUM_SYSTEM_VERSION" != "14.0" ]]; then
+            echo "::error::binary minimum macOS version changed from 14.0 to $BINARY_MINIMUM_SYSTEM_VERSION"
+            exit 1
+          fi
+          if ! awk -v version="$SPARKLE_MINIMUM_SYSTEM_VERSION" 'BEGIN { exit !(version + 0 <= 14.0) }'; then
+            echo "::error::Sparkle requires macOS $SPARKLE_MINIMUM_SYSTEM_VERSION, newer than BubbleSearch's 14.0 minimum"
+            exit 1
+          fi
+
           build/BubbleSearch.app/Contents/MacOS/BubbleSearch &
           APP_PID=$!
           sleep 5
