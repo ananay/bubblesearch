@@ -359,6 +359,16 @@ actor Engine {
     /// same-person SMS and iMessage chats merge into one conversation).
     func contextMessages(chatIds: [Int64], around date: Date, radius: Int = 25) throws -> [Message] {
         guard !chatIds.isEmpty else { return [] }
+        if isDemoConversation(chatIds) {
+            let ts = Int64(date.timeIntervalSince1970)
+            let before = try demoMessages(cond: "AND m.date_utc <= ?", params: [.int(ts)],
+                                          descending: true, limit: radius + 1)
+            let after = try demoMessages(cond: "AND m.date_utc > ?", params: [.int(ts)],
+                                         descending: false, limit: radius)
+            var messages = Array(before.reversed()) + after
+            try demoEnrich(&messages)
+            return messages
+        }
         let ns = Self.toAppleNs(date)
         let before = try liveMessages(chatIds: chatIds, cond: "AND m.date <= ?",
                                       condParams: [.int(ns)], descending: true, limit: radius + 1)
@@ -372,6 +382,18 @@ actor Engine {
     /// Most recent messages of a conversation, oldest-first.
     func recentMessages(chatIds: [Int64], before: Date? = nil, limit: Int = 60) throws -> [Message] {
         guard !chatIds.isEmpty else { return [] }
+        if isDemoConversation(chatIds) {
+            var cond = ""
+            var params: [SQLiteDB.Value] = []
+            if let before {
+                cond = "AND m.date_utc < ?"
+                params.append(.int(Int64(before.timeIntervalSince1970)))
+            }
+            var messages = Array(try demoMessages(cond: cond, params: params,
+                                                  descending: true, limit: limit).reversed())
+            try demoEnrich(&messages)
+            return messages
+        }
         var cond = ""
         var condParams: [SQLiteDB.Value] = []
         if let before {
@@ -573,6 +595,7 @@ actor Engine {
     /// media gallery. Live from chat.db; nothing is indexed.
     func mediaItems(chatIds: [Int64], limit: Int = 300) throws -> [MediaItem] {
         guard !chatIds.isEmpty else { return [] }
+        if isDemoConversation(chatIds) { return [] } // demo has no media
         let db = try liveDb()
         let inClause = chatIds.map { _ in "?" }.joined(separator: ",")
         let rows = try db.query(
@@ -694,6 +717,174 @@ actor Engine {
 
     func totalIndexed() throws -> Int {
         Int(try index.query("SELECT COUNT(*) FROM messages").first?.int(0) ?? 0)
+    }
+
+    // MARK: - Demo conversation
+    //
+    // A synthetic conversation for screen recordings, stored ONLY in the
+    // index database (plus two small side tables for tapbacks and reply
+    // quotes). chat.db is never written. The chat id and rowids sit at
+    // 9_000_000_000+, far beyond anything a real chat.db reaches, so the
+    // incremental sync watermark and INSERT OR REPLACE upserts (both driven
+    // purely by chat.db rowids) can never collide with demo rows. A `full:`
+    // re-index wipes demo data along with everything else — just re-seed.
+
+    static let demoChatId: Int64 = 9_000_000_000
+    private static let demoRowidBase: Int64 = 9_000_000_000
+
+    private func isDemoConversation(_ chatIds: [Int64]) -> Bool {
+        chatIds.contains(Self.demoChatId)
+    }
+
+    func seedDemoConversation() throws {
+        try removeDemoConversation()
+        try index.exec(
+            """
+            CREATE TABLE IF NOT EXISTS demo_reactions (
+              message_rowid INTEGER NOT NULL, kind INTEGER NOT NULL, reactor TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS demo_replies (
+              message_rowid INTEGER PRIMARY KEY, parent_rowid INTEGER NOT NULL);
+            """
+        )
+        let seeds = DemoSeeder.build()
+        try index.exec("BEGIN")
+        do {
+            try index.run(
+                """
+                INSERT INTO chats(chat_id, identifier, display_name, is_group, photo_path, participants)
+                VALUES(?, ?, ?, 0, NULL, ?)
+                ON CONFLICT(chat_id) DO UPDATE SET identifier = excluded.identifier,
+                  display_name = excluded.display_name
+                """,
+                [.int(Self.demoChatId), .text(DemoSeeder.handle),
+                 .text(DemoSeeder.displayName), .text(DemoSeeder.handle)]
+            )
+            for (i, seed) in seeds.enumerated() {
+                let rowid = Self.demoRowidBase + Int64(i)
+                try index.run(
+                    """
+                    INSERT INTO messages
+                      (rowid, guid, chat_id, sender, sender_name, is_from_me, date_utc, service, has_attachment, text)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'iMessage', 0, ?)
+                    """,
+                    [
+                        .int(rowid), .text("demo-msg-\(i)"), .int(Self.demoChatId),
+                        seed.fromMe ? .null : .text(DemoSeeder.handle),
+                        .text(seed.fromMe ? "Me" : DemoSeeder.displayName),
+                        .int(seed.fromMe ? 1 : 0),
+                        .int(Int64(seed.date.timeIntervalSince1970)),
+                        .text(seed.text),
+                    ]
+                )
+                try index.run("INSERT INTO messages_fts(rowid, text) VALUES (?, ?)",
+                              [.int(rowid), .text(seed.text)])
+                if let kind = seed.react {
+                    // The tapback comes from whoever did NOT write the message.
+                    let reactor = seed.fromMe ? DemoSeeder.displayName : "Me"
+                    try index.run("INSERT INTO demo_reactions(message_rowid, kind, reactor) VALUES (?, ?, ?)",
+                                  [.int(rowid), .int(Int64(kind)), .text(reactor)])
+                }
+                if let back = seed.replyBack, i - back >= 0 {
+                    try index.run("INSERT INTO demo_replies(message_rowid, parent_rowid) VALUES (?, ?)",
+                                  [.int(rowid), .int(Self.demoRowidBase + Int64(i - back))])
+                }
+            }
+            try index.exec("COMMIT")
+        } catch {
+            try? index.exec("ROLLBACK")
+            throw error
+        }
+    }
+
+    func removeDemoConversation() throws {
+        let rows = try index.query("SELECT rowid, text FROM messages WHERE chat_id = ?",
+                                   [.int(Self.demoChatId)])
+        try index.exec("BEGIN")
+        do {
+            for row in rows {
+                // External-content FTS5: deletions must be mirrored explicitly.
+                try index.run("INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', ?, ?)",
+                              [.int(row.int(0) ?? 0), .text(row.text(1) ?? "")])
+            }
+            try index.run("DELETE FROM messages WHERE chat_id = ?", [.int(Self.demoChatId)])
+            try index.run("DELETE FROM chats WHERE chat_id = ?", [.int(Self.demoChatId)])
+            try? index.exec("DELETE FROM demo_reactions; DELETE FROM demo_replies;")
+            try index.exec("COMMIT")
+        } catch {
+            try? index.exec("ROLLBACK")
+            throw error
+        }
+    }
+
+    /// Thread reads for the demo conversation come from the index (the demo
+    /// has no chat.db rows). Mirrors liveMessages + enrich.
+    private func demoMessages(cond: String, params: [SQLiteDB.Value],
+                              descending: Bool, limit: Int) throws -> [Message] {
+        let rows = try index.query(
+            """
+            SELECT m.rowid, m.guid, m.sender, m.sender_name, m.is_from_me, m.date_utc, m.service, m.text
+            FROM messages m
+            WHERE m.chat_id = \(Self.demoChatId) \(cond)
+            ORDER BY m.date_utc \(descending ? "DESC" : "ASC"), m.rowid \(descending ? "DESC" : "ASC")
+            LIMIT ?
+            """, params + [.int(Int64(limit))]
+        )
+        return rows.map { row in
+            Message(
+                rowid: row.int(0) ?? 0,
+                guid: row.text(1) ?? "",
+                chatId: Self.demoChatId,
+                chatName: DemoSeeder.displayName,
+                isGroup: false,
+                sender: row.text(2),
+                senderName: row.text(3) ?? "Unknown",
+                isFromMe: row.int(4) == 1,
+                date: Date(timeIntervalSince1970: TimeInterval(row.int(5) ?? 0)),
+                service: row.text(6),
+                hasAttachment: false,
+                text: row.text(7) ?? ""
+            )
+        }
+    }
+
+    private func demoEnrich(_ messages: inout [Message]) throws {
+        guard !messages.isEmpty else { return }
+        let ids = messages.map(\.rowid)
+        let inClause = ids.map { _ in "?" }.joined(separator: ",")
+        let byRowid = Dictionary(uniqueKeysWithValues: messages.enumerated().map { ($1.rowid, $0) })
+
+        let reactions = try index.query(
+            "SELECT message_rowid, kind, reactor FROM demo_reactions WHERE message_rowid IN (\(inClause))",
+            ids.map(SQLiteDB.Value.int)
+        )
+        var badges: [Int64: [ReactionBadge]] = [:]
+        for row in reactions {
+            let reactor = row.text(2) ?? "?"
+            badges[row.int(0) ?? 0, default: []].append(ReactionBadge(
+                kind: Int(row.int(1) ?? 0), custom: nil,
+                reactors: [reactor], fromMe: reactor == "Me"
+            ))
+        }
+        for (rowid, list) in badges {
+            if let i = byRowid[rowid] { messages[i].reactions = list }
+        }
+
+        let replies = try index.query(
+            """
+            SELECT r.message_rowid, p.sender_name, p.text, p.rowid, p.date_utc
+            FROM demo_replies r JOIN messages p ON p.rowid = r.parent_rowid
+            WHERE r.message_rowid IN (\(inClause))
+            """, ids.map(SQLiteDB.Value.int)
+        )
+        for row in replies {
+            guard let i = byRowid[row.int(0) ?? 0] else { continue }
+            var text = row.text(2) ?? ""
+            if text.count > 80 { text = String(text.prefix(80)) + "…" }
+            messages[i].replyTo = ReplyPreview(
+                senderName: row.text(1) ?? "?", text: text, rowid: row.int(3),
+                date: Date(timeIntervalSince1970: TimeInterval(row.int(4) ?? 0))
+            )
+        }
     }
 
     /// First/last message dates of a conversation (bounds for jump-to-date).

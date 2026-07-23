@@ -293,9 +293,38 @@ final class AppStore: ObservableObject {
         Task { await self.bootstrap() }
     }
 
+    /// Insert/remove the synthetic demo conversation (screen recordings).
+    /// Index-only; chat.db is never written.
+    func insertDemoConversation() {
+        Task {
+            try? await engine.seedDemoConversation()
+            await refreshAfterDemoChange()
+        }
+    }
+
+    func removeDemoConversation() {
+        Task {
+            if selectedConversation?.chatIds.contains(Engine.demoChatId) == true {
+                selectedKey = nil
+            }
+            try? await engine.removeDemoConversation()
+            await refreshAfterDemoChange()
+        }
+    }
+
+    private func refreshAfterDemoChange() async {
+        conversations = (try? await engine.conversations()) ?? conversations
+        totalIndexed = (try? await engine.totalIndexed()) ?? totalIndexed
+        senderSuggestions = (try? await engine.senderNames()) ?? senderSuggestions
+    }
+
     private func bootstrap() async {
         Telemetry.pingIfNeeded()
         CrashReporter.reportNewCrashesIfEnabled()
+
+        // Headless hooks for scripted demos/tests.
+        if CommandLine.arguments.contains("--seed-demo") { try? await engine.seedDemoConversation() }
+        if CommandLine.arguments.contains("--remove-demo") { try? await engine.removeDemoConversation() }
 
         // First-run gate: without Full Disk Access, show onboarding and poll
         // until the grant appears (macOS applies it without relaunch often
