@@ -10,7 +10,20 @@ import Foundation
 /// the crash log's metadata, and nothing is sent when the telemetry toggle
 /// is off.
 enum CrashReporter {
+    static let enabledKey = "crashReportsEnabled"
+
     private static let endpoint: URL? = URL(string: "https://bst.0xaa.io/crash")
+
+    /// One-time migration: crash reporting originally rode the usage-ping
+    /// toggle. Anyone who opted out under that combined switch must stay
+    /// opted out of crash reports until they explicitly re-enable them.
+    static func migrateSettingIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: enabledKey) == nil else { return }
+        if let telemetry = defaults.object(forKey: Telemetry.enabledKey) as? Bool, !telemetry {
+            defaults.set(false, forKey: enabledKey)
+        }
+    }
 
     /// Filename of the newest crash log successfully uploaded. macOS names
     /// reports "BubbleSearch-YYYY-MM-DD-HHMMSS.ips", so string order is
@@ -22,8 +35,9 @@ enum CrashReporter {
 
     static func reportNewCrashesIfEnabled() {
         guard let endpoint else { return }
+        migrateSettingIfNeeded()
         let defaults = UserDefaults.standard
-        guard defaults.object(forKey: Telemetry.enabledKey) as? Bool ?? true else { return }
+        guard defaults.object(forKey: enabledKey) as? Bool ?? true else { return }
 
         DispatchQueue.global(qos: .utility).async {
             let reportsDir = FileManager.default

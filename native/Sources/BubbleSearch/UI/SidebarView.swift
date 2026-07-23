@@ -98,6 +98,8 @@ struct ConversationRow: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
+                // Always render the preview Text, even when hidden — an empty
+                // line keeps every row the same height as its neighbors.
                 Text(previewLine)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
@@ -106,9 +108,22 @@ struct ConversationRow: View {
             }
         }
         .padding(.vertical, 11)
+        .contentShape(Rectangle())
+        .contextMenu {
+            if store.hiddenPreviewKeys.contains(conversation.key) {
+                Button("Show Preview Text") {
+                    store.setPreviewHidden(false, for: conversation.key)
+                }
+            } else {
+                Button("Hide Preview Text") {
+                    store.setPreviewHidden(true, for: conversation.key)
+                }
+            }
+        }
     }
 
     private var previewLine: String {
+        guard !store.hiddenPreviewKeys.contains(conversation.key) else { return "" }
         guard var text = conversation.previewText else { return "" }
         if text.count > 60 { text = String(text.prefix(60)) + "…" }
         if conversation.previewFromMe { return text }

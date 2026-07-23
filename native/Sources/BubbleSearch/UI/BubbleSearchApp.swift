@@ -50,13 +50,22 @@ struct BubbleSearchApp: App {
 struct SettingsView: View {
     @ObservedObject var updates: SparkleUpdateController
     @AppStorage(Telemetry.enabledKey) private var telemetryEnabled = true
+    @AppStorage(CrashReporter.enabledKey) private var crashReportsEnabled = true
 
     var body: some View {
         Form {
             Section {
-                Toggle("Share usage ping & crash reports", isOn: $telemetryEnabled)
+                Toggle("Share usage ping", isOn: $telemetryEnabled)
                 Text(
-                    "Once a day, BubbleSearch sends a persistent install ID, the app version, and your macOS version. If BubbleSearch crashed, an anonymous summary of the crash (exception type and stack frames) is sent too. Because the ID persists, your IP address and approximate location (from those requests) are also recorded. Never your messages, contacts, or search queries. Turn this off to send nothing."
+                    "Once a day, BubbleSearch sends a persistent install ID, the app version, and your macOS version. Because the ID persists, your IP address and approximate location (from that request) are also recorded. Never your messages, contacts, or search queries. Turning this off sends one final ping recording the opt-out — after that, nothing."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Send crash reports", isOn: $crashReportsEnabled)
+                Text(
+                    "If BubbleSearch crashed, an anonymous summary (exception type, macOS build, and top stack frames — never message content) is sent on the next launch, under the same install ID as the usage ping. Turning this off sends one final ping recording the opt-out — after that, nothing."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -76,6 +85,12 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize()
+        .onChange(of: telemetryEnabled) { _, enabled in
+            if !enabled { Telemetry.sendOptOut(of: "ping") }
+        }
+        .onChange(of: crashReportsEnabled) { _, enabled in
+            if !enabled { Telemetry.sendOptOut(of: "crash") }
+        }
     }
 }
 

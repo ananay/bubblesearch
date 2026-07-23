@@ -17,6 +17,26 @@ final class AppStore: ObservableObject {
     @Published var convoFilter = ""
     @Published var totalIndexed = 0
 
+    /// Conversations whose preview text is hidden in the sidebar, by
+    /// conversation key. Initialized synchronously from UserDefaults — the
+    /// store exists before the first render, so a hidden preview can never
+    /// flash on screen while the app starts.
+    private static let hiddenPreviewsDefaultsKey = "hiddenPreviewKeys"
+    @Published private(set) var hiddenPreviewKeys: Set<String> =
+        Set(UserDefaults.standard.stringArray(forKey: hiddenPreviewsDefaultsKey) ?? [])
+
+    func setPreviewHidden(_ hidden: Bool, for conversationKey: String) {
+        if hidden {
+            hiddenPreviewKeys.insert(conversationKey)
+        } else {
+            hiddenPreviewKeys.remove(conversationKey)
+        }
+        UserDefaults.standard.set(
+            Array(hiddenPreviewKeys).sorted(),
+            forKey: Self.hiddenPreviewsDefaultsKey
+        )
+    }
+
     var filteredConversations: [Conversation] {
         let f = convoFilter.trimmingCharacters(in: .whitespaces).lowercased()
         guard !f.isEmpty else { return conversations }
@@ -267,6 +287,9 @@ final class AppStore: ObservableObject {
             fatalError("BubbleSearch could not open its databases: \(error)\nGrant Full Disk Access or launch from a terminal that has it.")
         }
         media = MediaStore(engine: engine)
+        // Before any UI reads the crash-reports toggle: carry an existing
+        // telemetry opt-out over to the (newly separate) crash setting.
+        CrashReporter.migrateSettingIfNeeded()
         Task { await self.bootstrap() }
     }
 

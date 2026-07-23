@@ -28,6 +28,26 @@ enum Telemetry {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     }
 
+    /// One final, disclosed ping recording an opt-out, sent at the moment a
+    /// sharing toggle is switched off (the Settings captions say exactly
+    /// this). Fire-and-forget; nothing further is sent afterwards.
+    static func sendOptOut(of setting: String) {
+        guard let url = URL(string: "https://bst.0xaa.io/optout") else { return }
+        let payload: [String: String] = [
+            "id": installID,
+            "version": appVersion,
+            "os": ProcessInfo.processInfo.operatingSystemVersionString,
+            "setting": setting,
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("BubbleSearch/\(appVersion)", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        request.timeoutInterval = 10
+        URLSession.shared.dataTask(with: request).resume()
+    }
+
     static func pingIfNeeded() {
         guard let endpoint else { return }
         let defaults = UserDefaults.standard
