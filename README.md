@@ -46,7 +46,7 @@ Maintainers can use the GitHub workflow to turn the release commit message into 
 
 Searching, indexing, and browsing are entirely local — your messages, contacts, and queries never leave your Mac.
 
-The app sends one small usage ping per day: a persistent install ID, the app version, and your macOS version (and, because the ID persists, your IP / approximate location are recorded server-side). Never message content, contacts, or search queries. You can turn it off in **Settings** (⌘,).
+The app sends one small usage ping per day: a persistent install ID, the app version, and your macOS version. Never message content, contacts, or search queries. You can turn it off in **Settings** (⌘,).
 
 ## License
 
