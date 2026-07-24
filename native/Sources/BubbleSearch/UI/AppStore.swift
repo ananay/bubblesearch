@@ -293,36 +293,14 @@ final class AppStore: ObservableObject {
         Task { await self.bootstrap() }
     }
 
-    /// Insert/remove the synthetic demo conversation (screen recordings).
-    /// Index-only; chat.db is never written.
-    func insertDemoConversation() {
-        Task {
-            try? await engine.seedDemoConversation()
-            await refreshAfterDemoChange()
-        }
-    }
-
-    func removeDemoConversation() {
-        Task {
-            if selectedConversation?.chatIds.contains(Engine.demoChatId) == true {
-                selectedKey = nil
-            }
-            try? await engine.removeDemoConversation()
-            await refreshAfterDemoChange()
-        }
-    }
-
-    private func refreshAfterDemoChange() async {
-        conversations = (try? await engine.conversations()) ?? conversations
-        totalIndexed = (try? await engine.totalIndexed()) ?? totalIndexed
-        senderSuggestions = (try? await engine.senderNames()) ?? senderSuggestions
-    }
-
     private func bootstrap() async {
         Telemetry.pingIfNeeded()
         CrashReporter.reportNewCrashesIfEnabled()
 
-        // Headless hooks for scripted demos/tests.
+        // Demo conversation for screen recordings — launch-flag only, no UI.
+        // Index-only; chat.db is never written. Run the app binary with:
+        //   /Applications/BubbleSearch.app/Contents/MacOS/BubbleSearch --seed-demo
+        //   /Applications/BubbleSearch.app/Contents/MacOS/BubbleSearch --remove-demo
         if CommandLine.arguments.contains("--seed-demo") { try? await engine.seedDemoConversation() }
         if CommandLine.arguments.contains("--remove-demo") { try? await engine.removeDemoConversation() }
 

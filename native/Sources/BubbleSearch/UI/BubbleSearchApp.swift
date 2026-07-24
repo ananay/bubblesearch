@@ -24,13 +24,6 @@ struct BubbleSearchApp: App {
                     updates.checkForUpdates()
                 }
                 .disabled(!updates.isAvailable)
-                Divider()
-                // Synthetic conversation for screen recordings — lives only
-                // in BubbleSearch's own index, never in chat.db.
-                Menu("Demo Data") {
-                    Button("Insert Demo Conversation") { store.insertDemoConversation() }
-                    Button("Remove Demo Conversation") { store.removeDemoConversation() }
-                }
             }
             CommandGroup(after: .newItem) {
                 Button("Refresh") { store.refresh() }
