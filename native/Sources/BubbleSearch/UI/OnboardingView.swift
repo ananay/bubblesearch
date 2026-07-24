@@ -144,7 +144,11 @@ struct OnboardingView: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onDrag {
-            NSItemProvider(contentsOf: appURL) ?? NSItemProvider()
+            // NSItemProvider(contentsOf:) promises a COPY of the file's
+            // contents (materialized in a temp dir), which System Settings
+            // can't use — TCC needs the original bundle URL. Vending the
+            // NSURL object puts a real public.file-url on the pasteboard.
+            NSItemProvider(object: appURL as NSURL)
         } preview: {
             HStack(spacing: 8) {
                 Image(nsImage: appIcon)
